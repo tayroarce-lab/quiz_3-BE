@@ -293,3 +293,171 @@ HAVING COUNT(libro_categoria.id_libro) = (
         GROUP BY id_categoria
     ) AS subconsulta
 );
+
+
+-- =========================================================
+-- PRÁCTICA ADICIONAL - BASE DE DATOS BIBLIOTECA
+-- Extensión del código base existente
+-- =========================================================
+
+-- =========================================================
+-- PARTE 1: FUNCIONES DE AGREGACIÓN
+-- =========================================================
+
+-- 1. Promedio del año de publicación
+SELECT ROUND(AVG(YEAR(anio_publicacion)), 2) AS promedio_anio_publicacion
+FROM libro;
+
+-- 2. Cantidad total de libros en la biblioteca
+SELECT COUNT(*) AS total_libros
+FROM libro;
+
+-- 3. Cantidad total de préstamos realizados
+SELECT COUNT(*) AS total_prestamos
+FROM prestamo;
+
+-- 4. Cantidad de préstamos por usuario
+SELECT 
+    u.nombre AS usuario,
+    COUNT(p.id_prestamo) AS cantidad_prestamos
+FROM usuario u
+INNER JOIN prestamo p ON u.id_usuario = p.id_usuario
+GROUP BY u.id_usuario, u.nombre
+ORDER BY cantidad_prestamos DESC;
+
+-- 5. Veces que cada libro ha sido prestado
+SELECT 
+    l.titulo AS libro,
+    COUNT(dp.id_libro) AS veces_prestado
+FROM libro l
+INNER JOIN detalle_prestamo dp ON l.id_libro = dp.id_libro
+GROUP BY l.id_libro, l.titulo
+ORDER BY veces_prestado DESC;
+
+-- 6. Cada categoría junto con la cantidad de libros asociados
+SELECT 
+    c.nombre AS categoria,
+    COUNT(lc.id_libro) AS cantidad_libros
+FROM categoria c
+INNER JOIN libro_categoria lc ON c.id_categoria = lc.id_categoria
+GROUP BY c.id_categoria, c.nombre
+ORDER BY cantidad_libros DESC;
+
+-- 7. Cada editorial junto con la cantidad de libros publicados
+SELECT 
+    e.nombre AS editorial,
+    COUNT(l.id_libro) AS cantidad_libros
+FROM editorial e
+INNER JOIN libro l ON e.id_editorial = l.id_editorial
+GROUP BY e.id_editorial, e.nombre
+ORDER BY cantidad_libros DESC;
+
+
+-- =========================================================
+-- PARTE 2: INVESTIGACIÓN – JOIN AVANZADOS
+-- =========================================================
+
+-- 8. Usuarios y sus préstamos (incluye usuarios sin préstamos)
+SELECT 
+    u.nombre AS usuario,
+    u.correo,
+    p.id_prestamo,
+    p.fecha_prestamo
+FROM usuario u
+LEFT JOIN prestamo p ON u.id_usuario = p.id_usuario
+ORDER BY u.nombre, p.fecha_prestamo;
+
+-- 9. Libros y sus detalles de préstamo (incluye libros no prestados)
+SELECT 
+    l.titulo AS libro,
+    l.anio_publicacion,
+    dp.id_prestamo,
+    dp.fecha_devolucion,
+    dp.devuelto
+FROM libro l
+LEFT JOIN detalle_prestamo dp ON l.id_libro = dp.id_libro
+ORDER BY l.titulo;
+
+-- 10. Usuarios y préstamos asociados (RIGHT JOIN)
+SELECT 
+    u.nombre AS usuario,
+    u.correo,
+    p.id_prestamo,
+    p.fecha_prestamo
+FROM usuario u
+RIGHT JOIN prestamo p ON u.id_usuario = p.id_usuario
+ORDER BY p.fecha_prestamo;
+
+-- 11. Categorías y sus libros (incluye categorías vacías)
+SELECT 
+    c.nombre AS categoria,
+    l.titulo AS libro
+FROM categoria c
+LEFT JOIN libro_categoria lc ON c.id_categoria = lc.id_categoria
+LEFT JOIN libro           l  ON lc.id_libro    = l.id_libro
+ORDER BY c.nombre, l.titulo;
+
+-- 12. Usuarios y libros solicitados (incluye usuarios sin préstamos)
+SELECT 
+    u.nombre    AS usuario,
+    l.titulo    AS libro,
+    p.fecha_prestamo
+FROM usuario u
+LEFT JOIN prestamo         p  ON u.id_usuario  = p.id_usuario
+LEFT JOIN detalle_prestamo dp ON p.id_prestamo = dp.id_prestamo
+LEFT JOIN libro            l  ON dp.id_libro   = l.id_libro
+ORDER BY u.nombre, p.fecha_prestamo;
+
+
+-- =========================================================
+-- PARTE 3: EXTENSIÓN DEL MODELO - TABLA MULTA
+-- =========================================================
+
+-- Crear la tabla multa relacionada con prestamo
+CREATE TABLE IF NOT EXISTS multa (
+    id_multa     INT           PRIMARY KEY AUTO_INCREMENT,
+    id_prestamo  INT           NOT NULL,
+    monto        DECIMAL(10,2) NOT NULL,
+    fecha_multa  DATE          NOT NULL,
+
+    FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo)
+);
+
+-- Datos de prueba para multa
+INSERT INTO multa (id_prestamo, monto, fecha_multa) VALUES
+(1, 500.00,  '2025-01-22'),
+(3, 250.00,  '2025-02-15'),
+(5, 750.00,  '2025-03-20'),
+(6, 300.00,  '2025-04-05'),
+(7, 1000.00, '2025-04-20');
+
+
+-- =========================================================
+-- PARTE 4: CONSULTAS CON LA NUEVA TABLA
+-- =========================================================
+
+-- 13. Préstamos con sus multas y montos
+SELECT 
+    p.id_prestamo,
+    p.fecha_prestamo,
+    u.nombre        AS usuario,
+    l.titulo        AS libro,
+    m.monto         AS monto_multa,
+    m.fecha_multa
+FROM multa m
+INNER JOIN prestamo         p  ON m.id_prestamo = p.id_prestamo
+INNER JOIN usuario          u  ON p.id_usuario  = u.id_usuario
+INNER JOIN detalle_prestamo dp ON p.id_prestamo = dp.id_prestamo
+INNER JOIN libro            l  ON dp.id_libro   = l.id_libro
+ORDER BY m.fecha_multa;
+
+-- 14. Total de multas por usuario
+SELECT 
+    u.nombre             AS usuario,
+    COUNT(m.id_multa)    AS cantidad_multas,
+    SUM(m.monto)         AS total_multas
+FROM usuario u
+INNER JOIN prestamo p ON u.id_usuario  = p.id_usuario
+INNER JOIN multa    m ON p.id_prestamo = m.id_prestamo
+GROUP BY u.id_usuario, u.nombre
+ORDER BY total_multas DESC;
